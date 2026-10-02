@@ -41,7 +41,7 @@ const LABELS: Record<Category, { full: string; short: string }> = {
   gen: { full: 'gen', short: 'gen' },
 }
 
-/** Columns the band keeps clear of its own collapse mark. */
+/** Columns the terminal's band keeps clear for its own `[-]` collapse mark at the right edge; the desktop draws none. */
 const BAND_CHROME = 4
 /** At most this many commits show at once; the list scrolls under a fixed title and totals. */
 const LIST_ROWS = 8
@@ -169,7 +169,7 @@ export function drawBand(ui: BandUi, r: LocReport, view: BandView, actions: Band
   )
   if (!isOpen) {
     return (
-      <Box key="loc-split" flexDirection="column" paddingX={PADDING}>
+      <Box key="loc-split" flexDirection="column" paddingLeft={PADDING} paddingRight={PADDING + chrome}>
         {summary}
       </Box>
     )
@@ -220,7 +220,7 @@ export function drawBand(ui: BandUi, r: LocReport, view: BandView, actions: Band
     barCell(row >= thumbAt && row < thumbAt + thumb ? <Text>•</Text> : <Text dimColor>·</Text>)
 
   return (
-    <Box key="loc-split" flexDirection="column" paddingX={PADDING}>
+    <Box key="loc-split" flexDirection="column" paddingLeft={PADDING} paddingRight={PADDING + chrome}>
       <Box flexDirection="column" marginBottom={1}>
         <Box flexDirection="row" justifyContent="space-between">
           <Text bold wrap="truncate">

@@ -1,6 +1,6 @@
 {
   "name": "loc-split",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Lines changed against main, split into code, comments, tests, docs and generated files, in a row above the prompt that expands into a per-commit table",
   "author": {
     "name": "Roman Hotsiy",

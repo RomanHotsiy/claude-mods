@@ -1,0 +1,20 @@
+{
+  "name": "loc-split",
+  "version": "0.1.0",
+  "description": "Lines changed against main, split into code, comments, tests, docs and generated files, in a row above the prompt that expands into a per-commit table",
+  "author": {
+    "name": "Roman Hotsiy",
+    "url": "https://github.com/RomanHotsiy"
+  },
+  "homepage": "https://github.com/RomanHotsiy/claude-mods/tree/main/loc-split",
+  "repository": "https://github.com/RomanHotsiy/claude-mods",
+  "license": "MIT",
+  "keywords": [
+    "git",
+    "diff",
+    "lines-of-code",
+    "mod",
+    "status"
+  ],
+  "types": "./types/index.d.ts"
+}

@@ -47,7 +47,7 @@ A mod is code that runs inside Claude Code on your machine, with the same access
 
 **Sends: nothing.** It makes no network calls, and nothing it reads leaves your machine. The model sees nothing from it either, apart from the one line `/loc-split` prints when the session is not in a git repository with a `main` or `master` branch. It writes no files: what it measures is kept in the session's memory and drawn in the band above the prompt.
 
-**Runs: `git`, read-only, in your repository.** Every command goes through `git -c core.quotePath=false` (so paths with non-ASCII names come back as written) and is listed in [`hooks/commands.ts`](hooks/commands.ts):
+**Runs: `git`, read-only, in your repository.** Every call is in one function, `refresh` in [`hooks/register.tsx`](hooks/register.tsx); the commands that print paths are built in [`hooks/commands.ts`](hooks/commands.ts) and go through `git -c core.quotePath=false`, so paths with non-ASCII names come back as written:
 
 | Command | Why |
 | --- | --- |

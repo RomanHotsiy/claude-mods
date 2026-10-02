@@ -60,60 +60,21 @@ const FITS = [
 
 type Fit = (typeof FITS)[number]
 
-/** Runs one read-only git command (see `measureCommands` and the README for the full list). */
-function git($: EngineInterface, cwd: string, args: readonly string[]) {
-  return $.process.run(gitArgv(args), { cwd, timeoutMs: 20_000 })
-}
+const GIT_TIMEOUT_MS = 20_000
 
-async function findBase($: EngineInterface, root: string): Promise<string | null> {
-  const head = await git($, root, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'])
-  const candidates = head.exitCode === 0 ? [...BASES, head.stdout.trim()] : BASES
-  for (const ref of candidates) {
-    const found = await git($, root, ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`])
-    if (found.exitCode === 0) return ref
-  }
+type GitRun = { exitCode: number; stdout: string; isStdoutTruncated: boolean }
 
-  return null
-}
-
-async function tallyUntracked($: EngineInterface, root: string, listing: string) {
-  const split = emptySplit()
-  const paths = listing.split('\0').filter(path => path !== '')
-  const texts = await Promise.all(
-    paths.slice(0, UNTRACKED_LIMIT).map(path => $.fs.read(`${root}/${path}`).catch(() => '')),
-  )
-  texts.forEach((text, i) => tallyNewFile(paths[i] ?? '', text, split))
-
-  return { split, isPartial: paths.length > UNTRACKED_LIMIT }
-}
-
-async function measure($: EngineInterface): Promise<LocReport | null> {
-  const top = await git($, await $.session.cwd(), ['rev-parse', '--show-toplevel'])
-  if (top.exitCode !== 0) return null
-  const root = top.stdout.trim()
-  const base = await findBase($, root)
-  if (base === null) return null
-  const found = await git($, root, ['merge-base', 'HEAD', base])
-  if (found.exitCode !== 0) return null
-  const mergeBase = found.stdout.trim()
-
-  const commands = measureCommands(mergeBase)
-  const [listed, patched, generated, counted, dirty, dirtyGenerated, net, netGenerated, others] = await Promise.all([
-    git($, root, commands.listed),
-    git($, root, commands.patched),
-    git($, root, commands.generated),
-    git($, root, commands.counted),
-    git($, root, commands.dirty),
-    git($, root, commands.dirtyGenerated),
-    git($, root, commands.net),
-    git($, root, commands.netGenerated),
-    git($, root, commands.others),
-  ])
-  const untracked = await tallyUntracked($, root, others.stdout)
-
-  const patchedBySha = new Map(tallyLog(patched.stdout).map(one => [one.sha, one.split]))
-  const generatedBySha = tallyNumstatLog(generated.stdout)
-  const commits: LocCommit[] = listed.stdout
+/** The report, from the git runs `refresh` made; no `$` here. */
+const assemble = (
+  base: string,
+  mergeBase: string,
+  runs: Record<'listed' | 'patched' | 'generated' | 'counted' | 'dirty' | 'dirtyGenerated' | 'net' | 'netGenerated', GitRun>,
+  untracked: LocSplit,
+  isUntrackedCut: boolean,
+): LocReport => {
+  const patchedBySha = new Map(tallyLog(runs.patched.stdout).map(one => [one.sha, one.split]))
+  const generatedBySha = tallyNumstatLog(runs.generated.stdout)
+  const commits: LocCommit[] = runs.listed.stdout
     .split('\n')
     .filter(line => line !== '')
     .map(line => {
@@ -127,21 +88,82 @@ async function measure($: EngineInterface): Promise<LocReport | null> {
     base,
     mergeBase,
     commits,
-    commitCount: Number(counted.stdout.trim()) || commits.length,
-    uncommitted: addSplits(tallyNumstat(dirtyGenerated.stdout, tallyPatch(dirty.stdout)), untracked.split),
-    net: addSplits(tallyNumstat(netGenerated.stdout, tallyPatch(net.stdout)), untracked.split),
-    isPartial: untracked.isPartial || [patched, generated, dirty, net].some(run => run.isStdoutTruncated),
+    commitCount: Number(runs.counted.stdout.trim()) || commits.length,
+    uncommitted: addSplits(tallyNumstat(runs.dirtyGenerated.stdout, tallyPatch(runs.dirty.stdout)), untracked),
+    net: addSplits(tallyNumstat(runs.netGenerated.stdout, tallyPatch(runs.net.stdout)), untracked),
+    isPartial: isUntrackedCut || [runs.patched, runs.generated, runs.dirty, runs.net].some(run => run.isStdoutTruncated),
   }
 }
 
 let pending: Timer | null = null
 let isRefreshing = false
 
+/**
+ * Measures the branch against main and stores the report. Every `$` call is
+ * written here, in one function, so what the mod runs and reads is all in
+ * one place: read-only git commands (listed in the README) and the text of
+ * untracked files.
+ */
 async function refresh($: EngineInterface) {
   if (isRefreshing) return
   isRefreshing = true
   try {
-    const measured = await measure($)
+    let measured: LocReport | null = null
+    measure: {
+      const cwd = await $.session.cwd()
+      const top = await $.process.run(['git', 'rev-parse', '--show-toplevel'], { cwd, timeoutMs: GIT_TIMEOUT_MS })
+      if (top.exitCode !== 0) break measure
+      const root = top.stdout.trim()
+      const options = { cwd: root, timeoutMs: GIT_TIMEOUT_MS }
+
+      const head = await $.process.run(['git', 'symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'], options)
+      let base: string | null = null
+      for (const ref of head.exitCode === 0 ? [...BASES, head.stdout.trim()] : BASES) {
+        const found = await $.process.run(['git', 'rev-parse', '--verify', '--quiet', `${ref}^{commit}`], options)
+        if (found.exitCode === 0) {
+          base = ref
+          break
+        }
+      }
+      if (base === null) break measure
+      const found = await $.process.run(['git', 'merge-base', 'HEAD', base], options)
+      if (found.exitCode !== 0) break measure
+      const mergeBase = found.stdout.trim()
+
+      const commands = measureCommands(mergeBase)
+      const [listed, patched, generated, counted, dirty, dirtyGenerated, net, netGenerated, others] = await Promise.all([
+        $.process.run(gitArgv(commands.listed), options),
+        $.process.run(gitArgv(commands.patched), options),
+        $.process.run(gitArgv(commands.generated), options),
+        $.process.run(gitArgv(commands.counted), options),
+        $.process.run(gitArgv(commands.dirty), options),
+        $.process.run(gitArgv(commands.dirtyGenerated), options),
+        $.process.run(gitArgv(commands.net), options),
+        $.process.run(gitArgv(commands.netGenerated), options),
+        $.process.run(gitArgv(commands.others), options),
+      ])
+
+      const paths = others.stdout.split('\0').filter(path => path !== '')
+      const untracked = emptySplit()
+      for (const path of paths.slice(0, UNTRACKED_LIMIT)) {
+        let text = ''
+        try {
+          text = await $.fs.read(`${root}/${path}`)
+        } catch {
+          text = ''
+        }
+        tallyNewFile(path, text, untracked)
+      }
+
+      measured = assemble(
+        base,
+        mergeBase,
+        { listed, patched, generated, counted, dirty, dirtyGenerated, net, netGenerated },
+        untracked,
+        paths.length > UNTRACKED_LIMIT,
+      )
+    }
+
     const held = await $.state.get(REPORT)
     if (JSON.stringify(measured) !== JSON.stringify(held.value ?? null)) {
       await $.state.set(REPORT, measured)
@@ -162,11 +184,6 @@ async function scrollBy($: EngineInterface, by: number, lastOffset: number) {
   const held = await $.state.get(SCROLL)
   const at = Math.min(held.value ?? 0, lastOffset)
   await $.state.set(SCROLL, Math.max(0, Math.min(lastOffset, at + by)), { ifVersion: held.version })
-}
-
-function refreshSoon($: EngineInterface, ms: number) {
-  pending?.cancel()
-  pending = $.clock.after(ms, () => void refresh($))
 }
 
 const isZero = (count: LocCount) => count.added === 0 && count.removed === 0
@@ -237,7 +254,8 @@ export const register: Register = on => {
       name: 'loc-split',
       description: 'Open or close the per-commit breakdown of lines changed against main',
     })
-    refreshSoon($, 0)
+    pending?.cancel()
+    pending = $.clock.after(0, () => void refresh($))
     $.clock.every(REFRESH_MS, () => void refresh($))
 
     return next(e)
@@ -254,14 +272,18 @@ export const register: Register = on => {
   })
 
   on('turn.complete', ($, e, next) => {
-    refreshSoon($, 0)
+    pending?.cancel()
+    pending = $.clock.after(0, () => void refresh($))
 
     return next(e)
   })
 
   on('tool.call', async ($, e, next) => {
     const ran = await next(e)
-    if (MUTATING_TOOLS.has(e.tool)) refreshSoon($, 1500)
+    if (MUTATING_TOOLS.has(e.tool)) {
+      pending?.cancel()
+      pending = $.clock.after(1500, () => void refresh($))
+    }
 
     return ran
   })

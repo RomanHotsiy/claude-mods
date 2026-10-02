@@ -1,70 +1,70 @@
 // git output recorded from a scratch repository: main plus three commits, one uncommitted edit, one untracked file.
 export const ROOT = "/tmp/loc-split-fixture"
 export const RUNS: Record<string, { exitCode: number; stdout: string; stderr: string; isStdoutTruncated: boolean; isStderrTruncated: boolean }> = {
- "git -c core.quotePath=false rev-parse --show-toplevel": {
+ "git rev-parse --show-toplevel": {
   "exitCode": 0,
   "stdout": "/tmp/loc-split-fixture\n",
   "stderr": "",
   "isStdoutTruncated": false,
   "isStderrTruncated": false
  },
- "git -c core.quotePath=false symbolic-ref --quiet --short refs/remotes/origin/HEAD": {
+ "git symbolic-ref --quiet --short refs/remotes/origin/HEAD": {
   "exitCode": 1,
   "stdout": "",
   "stderr": "",
   "isStdoutTruncated": false,
   "isStderrTruncated": false
  },
- "git -c core.quotePath=false rev-parse --verify --quiet origin/main^{commit}": {
+ "git rev-parse --verify --quiet origin/main^{commit}": {
   "exitCode": 1,
   "stdout": "",
   "stderr": "",
   "isStdoutTruncated": false,
   "isStderrTruncated": false
  },
- "git -c core.quotePath=false rev-parse --verify --quiet main^{commit}": {
+ "git rev-parse --verify --quiet main^{commit}": {
   "exitCode": 0,
   "stdout": "388bf7b692fff3e23c6c0fc94c30dc5f7a16ffbd\n",
   "stderr": "",
   "isStdoutTruncated": false,
   "isStderrTruncated": false
  },
- "git -c core.quotePath=false rev-parse --verify --quiet origin/master^{commit}": {
+ "git rev-parse --verify --quiet origin/master^{commit}": {
   "exitCode": 1,
   "stdout": "",
   "stderr": "",
   "isStdoutTruncated": false,
   "isStderrTruncated": false
  },
- "git -c core.quotePath=false rev-parse --verify --quiet master^{commit}": {
+ "git rev-parse --verify --quiet master^{commit}": {
   "exitCode": 1,
   "stdout": "",
   "stderr": "",
   "isStdoutTruncated": false,
   "isStderrTruncated": false
  },
- "git -c core.quotePath=false merge-base HEAD origin/main": {
+ "git merge-base HEAD origin/main": {
   "exitCode": 128,
   "stdout": "",
   "stderr": "",
   "isStdoutTruncated": false,
   "isStderrTruncated": false
  },
- "git -c core.quotePath=false merge-base HEAD main": {
+ "git merge-base HEAD main": {
   "exitCode": 0,
   "stdout": "388bf7b692fff3e23c6c0fc94c30dc5f7a16ffbd\n",
   "stderr": "",
   "isStdoutTruncated": false,
   "isStderrTruncated": false
  },
- "git -c core.quotePath=false merge-base HEAD origin/master": {
+ "git merge-base HEAD origin/master": {
   "exitCode": 128,
   "stdout": "",
   "stderr": "",
   "isStdoutTruncated": false,
   "isStderrTruncated": false
  },
- "git -c core.quotePath=false merge-base HEAD master": {
+ "git merge-base HEAD master": {
   "exitCode": 128,
   "stdout": "",
   "stderr": "",

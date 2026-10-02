@@ -16,16 +16,32 @@ The numbers are lines added and removed between the merge base with `main` and y
 
 | Category | Files |
 | --- | --- |
-| **tests** | `*.test.*`, `*.spec.*`, `*_test.go`, `test_*.py`, `*Test.java`, `*_spec.rb`, and anything under `tests/`, `__tests__/`, `spec/`, `e2e/`, `fixtures/`, … |
-| **docs** | `.md`, `.mdx`, `.rst`, `.txt`, `.adoc`, README / CHANGELOG / LICENSE, and anything under `docs/` |
-| **gen** | lockfiles (npm, pnpm, yarn, bun, Cargo, Poetry, uv, `go.sum`, …), Drizzle `meta/*_snapshot.json` and `_journal.json`, Jest `.snap`, `*.gen.*`, `*.generated.*`, `__generated__/`, protobuf and Dart codegen, minified bundles and source maps |
+| **gen** | files a tool writes or a project vendors (full list in [`hooks/split.ts`](hooks/split.ts)):<br>• **lockfiles:** npm, pnpm, Yarn (and PnP), Bun, Deno, Cargo, Go, Poetry, uv, PDM, Pipenv, Bundler, Composer, CocoaPods, SwiftPM, Pub, Mix, Gradle, NuGet, Nix, Terraform, Bazel and more<br>• **migrations and ORMs:** Drizzle `meta/` snapshots and journal, Prisma `migration_lock.toml`, Django `migrations/0001_*.py`, Rails `db/schema.rb`, EF Core designer files and model snapshots, sqlc `*.sql.go`<br>• **test snapshots:** Jest/Vitest `.snap` and `__snapshots__/`, insta, syrupy, swift-snapshot-testing<br>• **codegen:** `*.gen.*`, `*.generated.*`, `*_generated.*`, `zz_generated.*`, `__generated__/`, protobuf and gRPC for Go, Python, C++, JS/TS, Swift and Dart, `build_runner` and `freezed`, .NET designer files, `next-env.d.ts`, Xcode `project.pbxproj`<br>• **bundles:** `dist/`, `*.min.js`, `*.min.css`, source maps<br>• **vendored:** a top-level `vendor/`, `node_modules/`<br>• anything `.gitattributes` marks `linguist-generated` or `linguist-vendored`, as GitHub reads it |
+| **tests** | • **by name:** `*.test.*`, `*.spec.*`, `*_test.*` (Go, Python, Ruby, Elixir, Dart, C++, Rust), `test_*`, `*.e2e.*`, `*.e2e-spec.*`, Cypress `*.cy.*`, type tests `*.test-d.ts`, `*_unittest.*`, `FooTest` / `FooTests` / `FooSpec` / `FooIT` / `FooSuite` / `FooTestCase` (JVM, .NET, Swift, Objective-C, PHP, Dart, Haskell, C++), `conftest.py`, Django `tests.py`, RSpec helpers, Bats `*.bats`, Perl `*.t`, testthat `test-*.R`<br>• **by folder:** `test/`, `tests/`, `__tests__/`, `__mocks__/`, `mocks/`, `fixtures/`, `e2e/`, `integration_test/`, `androidTest/`, `testFixtures/`, `testdata/`, `cypress/`, `playwright/`, .NET `*.Tests/` projects, and `spec/` for code (an OpenAPI `spec/openapi.yaml` stays code) |
+| **docs** | `.md`, `.mdx`, `.rst`, `.adoc`, `.txt`, `.org`, `.tex`, `.pod`, README, CHANGELOG, LICENSE, CONTRIBUTING, SECURITY and the like, and anything under `docs/`, `doc/`, `documentation/`, `wiki/`, `guides/` |
 | **code** / **comments** | everything else, each changed line sorted by whether it is a comment |
 
-Comments are told apart per language: `//` and `/* */` (JSDoc `*` lines included) for the C family, JS/TS, Go, Rust, Java, Swift, CSS and the like; `#` for Python, Ruby, shell, YAML, TOML; Python docstrings; `--` for SQL, Lua and Haskell; `<!-- -->` for HTML, XML, Vue and Svelte. A line with code before its comment counts as code.
+Categories are checked in that order, so `src/__snapshots__/button.test.tsx.snap` is **gen**, not **tests**.
+
+Comments are told apart per language:
+
+| Syntax | Languages |
+| --- | --- |
+| `//`, `/* */` (JSDoc and Javadoc `*` lines included) | JavaScript, TypeScript, Java, Kotlin, Scala, Groovy, Go, Rust, C, C++, Objective-C, C#, Swift, Dart, PHP, Zig, Solidity, Protobuf, Thrift, Prisma, GLSL/HLSL/WGSL/Metal, CUDA, Verilog, SCSS, Less; CSS has `/* */` alone |
+| `#` | Python, Ruby, shell, PowerShell, Perl, R, Elixir, Crystal, Nim, Julia, CoffeeScript, YAML, TOML, CMake, Makefile, Dockerfile, Bazel/Starlark, GraphQL, `.env`, ignore files |
+| `#` with `//` and `/* */` | Terraform, HCL, Nix |
+| block comments | Python and GraphQL docstrings, Ruby `=begin`, Perl POD, Julia `#= =#`, PowerShell `<# #>`, CoffeeScript `###`, Nim `#[ ]#` |
+| `--` | SQL, Lua (`--[[ ]]`), Haskell, Elm, PureScript (`{- -}`), Ada, VHDL |
+| `(* *)` | OCaml, F# (with `//`) |
+| `;` | Clojure, Emacs Lisp, Scheme, Racket, Fennel (`#| |#`), INI, assembly |
+| others | Erlang `%`, Fortran `!`, Visual Basic `'`, batch `REM` / `::`, Vim `"` |
+| markup | HTML, XML, SVG, XAML, MSBuild and plist files `<!-- -->`; Vue, Svelte and Astro (`<!-- -->` and `//`); Jinja, Twig, Nunjucks `{# #}`; Handlebars and Mustache `{{! }}` |
+
+A line with code before its comment counts as code; a blank line inside a block comment counts as a comment.
 
 Generated files are counted with `git diff --numstat`, so a large lockfile change costs nothing to measure, and they are left out of the comment analysis entirely.
 
-Categories with no changed lines are left off the row. When the band is narrow the row drops the word "commits", then shortens the labels (`cmt`, `test`, `doc`), then shows added lines only.
+Categories with no changed lines are left off the row. When the band is narrow the row shortens the labels (`cmt`, `test`, `doc`), then shows added lines only, then drops the word "commits".
 
 ## When it refreshes
 
@@ -72,8 +88,10 @@ A mod is code that runs inside Claude Code on your machine, with the same access
 | `git diff -U0 -M … HEAD -- :/ <excludes>` and `git diff --numstat --no-renames … HEAD -- <generated files>` | uncommitted changes |
 | `git diff -U0 -M … <merge-base> -- :/ <excludes>` and `git diff --numstat --no-renames … <merge-base> -- <generated files>` | the net change against `main` |
 | `git ls-files --others --exclude-standard -z` | untracked files, which count as added |
+| `git check-attr -z --stdin linguist-generated linguist-vendored` | which untracked files `.gitattributes` marks generated; their paths go in on stdin |
+| `git diff --quiet HEAD -- ':(top,attr:linguist-generated)'` | once per session: whether this git can filter by `.gitattributes`; older git falls back to the file patterns alone |
 
-`<excludes>` and `<generated files>` are the same list of generated-file globs from the table above, as `:(top,exclude,glob)` and `:(top,glob)` pathspecs.
+`<excludes>` and `<generated files>` are the generated-file globs from the table above, as `:(top,exclude,glob)` and `:(top,glob)` pathspecs, plus `:(top,attr:linguist-generated)` and `:(top,attr:linguist-vendored)` (bare and `=true`) where git supports them.
 
 **Reads:** the output of those commands, and the text of untracked files (up to 500, through Claude Code's file access) to count their lines.
 

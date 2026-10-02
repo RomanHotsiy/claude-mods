@@ -2,10 +2,11 @@ import type { EngineInterface, On, Timer } from 'claude-code'
 
 import type { LocCommit, LocReport, LocSplit } from '../types'
 import { drawBand } from './band'
-import { BASES, gitArgv, measureCommands } from './commands'
+import { ATTRIBUTE_PROBE, BASES, CHECK_ATTRIBUTES, gitArgv, measureCommands } from './commands'
 import {
   addSplits,
   emptySplit,
+  markedGenerated,
   tallyLog,
   tallyNewFile,
   tallyNumstat,
@@ -59,6 +60,8 @@ const assemble = (
 
 let pending: Timer | null = null
 let isRefreshing = false
+/** Whether this git takes `.gitattributes` pathspecs; asked once per load. */
+let canFilterByAttribute: boolean | null = null
 
 /**
  * Measures the branch against main and stores the report. Every `$` call is
@@ -92,7 +95,11 @@ async function refresh($: EngineInterface) {
       if (found.exitCode !== 0) break measure
       const mergeBase = found.stdout.trim()
 
-      const commands = measureCommands(mergeBase)
+      if (canFilterByAttribute === null) {
+        const probe = await $.process.run(gitArgv(ATTRIBUTE_PROBE), options)
+        canFilterByAttribute = probe.exitCode === 0 || probe.exitCode === 1
+      }
+      const commands = measureCommands(mergeBase, canFilterByAttribute)
       const [listed, patched, generated, counted, dirty, dirtyGenerated, net, netGenerated, others] = await Promise.all([
         $.process.run(gitArgv(commands.listed), options),
         $.process.run(gitArgv(commands.patched), options),
@@ -106,15 +113,21 @@ async function refresh($: EngineInterface) {
       ])
 
       const paths = others.stdout.split('\0').filter(path => path !== '')
+      const readable = paths.slice(0, UNTRACKED_LIMIT)
+      const attributes =
+        readable.length === 0
+          ? null
+          : await $.process.run(gitArgv(CHECK_ATTRIBUTES), { ...options, stdin: `${readable.join('\0')}\0` })
+      const marked = markedGenerated(attributes?.exitCode === 0 ? attributes.stdout : '')
       const untracked = emptySplit()
-      for (const path of paths.slice(0, UNTRACKED_LIMIT)) {
+      for (const path of readable) {
         let text = ''
         try {
           text = await $.fs.read(`${root}/${path}`)
         } catch {
           text = ''
         }
-        tallyNewFile(path, text, untracked)
+        tallyNewFile(path, text, untracked, marked.has(path))
       }
 
       measured = assemble(

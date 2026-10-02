@@ -33,6 +33,16 @@ When the session starts, a moment after Claude edits a file or runs a command, a
 
 ## Install
 
+### Claude desktop app
+
+1. Open **Settings**.
+2. Type `plugins` and press Enter.
+3. In the top right corner, click **Add**.
+4. Enter `RomanHotsiy/claude-mods` and click **Sync**.
+5. You should now see **Loc split** in the list.
+
+### Claude Code in a terminal
+
 ```
 /plugin marketplace add RomanHotsiy/claude-mods
 /plugin install loc-split@claude-mods

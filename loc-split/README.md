@@ -41,7 +41,43 @@ When the session starts, a moment after Claude edits a file or runs a command, a
 
 The row shows in any session whose working directory is a git repository with a `main` or `master` branch.
 
-A mod is code that runs inside Claude Code on your machine, with the same access Claude Code has. Read the source first: it is three files under [`hooks/`](hooks). It runs `git` read-only in your repository and reads untracked files to count their lines; it writes nothing and makes no network calls.
+## What it runs, reads and sends
+
+A mod is code that runs inside Claude Code on your machine, with the same access Claude Code has; read the source before you install one. This one is three files under [`hooks/`](hooks).
+
+**Sends: nothing.** It makes no network calls, and nothing it reads leaves your machine. The model sees nothing from it either, apart from the one line `/loc-split` prints when the session is not in a git repository with a `main` or `master` branch. It writes no files: what it measures is kept in the session's memory and drawn in the band above the prompt.
+
+**Runs: `git`, read-only, in your repository.** Every command goes through `git -c core.quotePath=false` (so paths with non-ASCII names come back as written) and is listed in [`hooks/commands.ts`](hooks/commands.ts):
+
+| Command | Why |
+| --- | --- |
+| `git rev-parse --show-toplevel` | find the repository root |
+| `git symbolic-ref --quiet --short refs/remotes/origin/HEAD` | the remote's default branch, the last fallback for the base |
+| `git rev-parse --verify --quiet <ref>^{commit}` | which of `origin/main`, `main`, `origin/master`, `master` exists |
+| `git merge-base HEAD <base>` | where your branch left `main` |
+| `git log --no-merges --max-count=50 --format=%H%x1f%s <merge-base>..HEAD` | the commits to list |
+| `git log --no-merges --max-count=50 -p -U0 -M … <merge-base>..HEAD -- :/ <excludes>` | each commit's changed lines, to sort into code, comments, tests and docs |
+| `git log --no-merges --max-count=50 --numstat --no-renames … -- <generated files>` | each commit's line counts for generated files |
+| `git rev-list --no-merges --count <merge-base>..HEAD` | how many commits are ahead |
+| `git diff -U0 -M … HEAD -- :/ <excludes>` and `git diff --numstat --no-renames … HEAD -- <generated files>` | uncommitted changes |
+| `git diff -U0 -M … <merge-base> -- :/ <excludes>` and `git diff --numstat --no-renames … <merge-base> -- <generated files>` | the net change against `main` |
+| `git ls-files --others --exclude-standard -z` | untracked files, which count as added |
+
+`<excludes>` and `<generated files>` are the same list of generated-file globs from the table above, as `:(top,exclude,glob)` and `:(top,glob)` pathspecs.
+
+**Reads:** the output of those commands, and the text of untracked files (up to 500, through Claude Code's file access) to count their lines.
+
+**Hooks:**
+
+| Event | What it does |
+| --- | --- |
+| `session.start` | registers `/loc-split`, measures once, and starts a 20-second refresh timer |
+| `tool.call` | lets every tool call through unchanged; after an `Edit`, `MultiEdit`, `Write`, `NotebookEdit` or `Bash` call finishes it schedules a refresh. It never reads or changes the call's input or result |
+| `turn.complete` | schedules a refresh |
+| `command.run` for `/loc-split` | opens or closes the per-commit table |
+| `ui.render` for `AbovePrompt` | draws the row and the table in the band above the prompt; it steps aside while a survey uses the band |
+
+It reads nothing from the conversation: no prompts, no replies, no tool output.
 
 ## Develop
 

@@ -14,8 +14,6 @@ export type LocCommit = { sha: string; subject: string; split: LocSplit }
 export type LocReport = {
   /** The ref the branch is measured against, as resolved (`origin/main`). */
   base: string
-  /** The checked-out branch, `HEAD` when detached. */
-  branch: string
   mergeBase: string
   /** Newest first, at most the ones the expanded list holds. */
   commits: LocCommit[]

@@ -1,4 +1,3 @@
-import { atom, read, update } from 'claude-code'
 import type { EngineInterface, Register, RenderChildren, Timer } from 'claude-code'
 
 import type { LocCommit, LocCount, LocReport, LocSplit } from '../types'
@@ -15,10 +14,10 @@ import {
   tallyPatch,
 } from './split'
 
-const report = atom({ plugin: 'loc-split', key: 'report' } as const, null)
-const isExpanded = atom({ plugin: 'loc-split', key: 'isExpanded' } as const, false)
+const REPORT = { plugin: 'loc-split', key: 'report' } as const
+const IS_EXPANDED = { plugin: 'loc-split', key: 'isExpanded' } as const
 /** The first commit the expanded list shows; 0 is the newest. */
-const scroll = atom({ plugin: 'loc-split', key: 'scroll' } as const, 0)
+const SCROLL = { plugin: 'loc-split', key: 'scroll' } as const
 
 const UNTRACKED_LIMIT = 500
 const REFRESH_MS = 20_000
@@ -61,10 +60,12 @@ const FITS = [
 
 type Fit = (typeof FITS)[number]
 
-const git = ($: EngineInterface, cwd: string, args: readonly string[]) =>
-  $.process.run(gitArgv(args), { cwd, timeoutMs: 20_000 })
+/** Runs one read-only git command (see `measureCommands` and the README for the full list). */
+function git($: EngineInterface, cwd: string, args: readonly string[]) {
+  return $.process.run(gitArgv(args), { cwd, timeoutMs: 20_000 })
+}
 
-const findBase = async ($: EngineInterface, root: string): Promise<string | null> => {
+async function findBase($: EngineInterface, root: string): Promise<string | null> {
   const head = await git($, root, ['symbolic-ref', '--quiet', '--short', 'refs/remotes/origin/HEAD'])
   const candidates = head.exitCode === 0 ? [...BASES, head.stdout.trim()] : BASES
   for (const ref of candidates) {
@@ -75,7 +76,7 @@ const findBase = async ($: EngineInterface, root: string): Promise<string | null
   return null
 }
 
-const tallyUntracked = async ($: EngineInterface, root: string, listing: string) => {
+async function tallyUntracked($: EngineInterface, root: string, listing: string) {
   const split = emptySplit()
   const paths = listing.split('\0').filter(path => path !== '')
   const texts = await Promise.all(
@@ -86,7 +87,7 @@ const tallyUntracked = async ($: EngineInterface, root: string, listing: string)
   return { split, isPartial: paths.length > UNTRACKED_LIMIT }
 }
 
-const measure = async ($: EngineInterface): Promise<LocReport | null> => {
+async function measure($: EngineInterface): Promise<LocReport | null> {
   const top = await git($, await $.session.cwd(), ['rev-parse', '--show-toplevel'])
   if (top.exitCode !== 0) return null
   const root = top.stdout.trim()
@@ -97,22 +98,16 @@ const measure = async ($: EngineInterface): Promise<LocReport | null> => {
   const mergeBase = found.stdout.trim()
 
   const commands = measureCommands(mergeBase)
-  const [
-    [listed, patched, generated, counted, dirty, dirtyGenerated, net, netGenerated, others],
-    branch,
-  ] = await Promise.all([
-    Promise.all([
-      git($, root, commands.listed),
-      git($, root, commands.patched),
-      git($, root, commands.generated),
-      git($, root, commands.counted),
-      git($, root, commands.dirty),
-      git($, root, commands.dirtyGenerated),
-      git($, root, commands.net),
-      git($, root, commands.netGenerated),
-      git($, root, commands.others),
-    ]),
-    git($, root, ['branch', '--show-current']),
+  const [listed, patched, generated, counted, dirty, dirtyGenerated, net, netGenerated, others] = await Promise.all([
+    git($, root, commands.listed),
+    git($, root, commands.patched),
+    git($, root, commands.generated),
+    git($, root, commands.counted),
+    git($, root, commands.dirty),
+    git($, root, commands.dirtyGenerated),
+    git($, root, commands.net),
+    git($, root, commands.netGenerated),
+    git($, root, commands.others),
   ])
   const untracked = await tallyUntracked($, root, others.stdout)
 
@@ -130,7 +125,6 @@ const measure = async ($: EngineInterface): Promise<LocReport | null> => {
 
   return {
     base,
-    branch: branch.stdout.trim() || 'HEAD',
     mergeBase,
     commits,
     commitCount: Number(counted.stdout.trim()) || commits.length,
@@ -148,12 +142,26 @@ async function refresh($: EngineInterface) {
   isRefreshing = true
   try {
     const measured = await measure($)
-    if (JSON.stringify(measured) !== JSON.stringify(await read($, report))) {
-      await update($, report, () => measured)
+    const held = await $.state.get(REPORT)
+    if (JSON.stringify(measured) !== JSON.stringify(held.value ?? null)) {
+      await $.state.set(REPORT, measured)
     }
   } finally {
     isRefreshing = false
   }
+}
+
+/** Opens or closes the per-commit table. */
+async function toggleExpanded($: EngineInterface) {
+  const held = await $.state.get(IS_EXPANDED)
+  await $.state.set(IS_EXPANDED, !(held.value ?? false), { ifVersion: held.version })
+}
+
+/** Moves the commit list's window by `by` rows, kept within `[0, lastOffset]`. */
+async function scrollBy($: EngineInterface, by: number, lastOffset: number) {
+  const held = await $.state.get(SCROLL)
+  const at = Math.min(held.value ?? 0, lastOffset)
+  await $.state.set(SCROLL, Math.max(0, Math.min(lastOffset, at + by)), { ifVersion: held.version })
 }
 
 function refreshSoon($: EngineInterface, ms: number) {
@@ -237,10 +245,10 @@ export const register: Register = on => {
 
   on('command.run', { command: 'loc-split' }, async $ => {
     await refresh($)
-    if ((await read($, report)) === null) {
+    if (((await $.state.get(REPORT)).value ?? null) === null) {
       return { text: 'loc-split: not in a git repository with a main or master branch.' }
     }
-    await update($, isExpanded, open => !open)
+    await toggleExpanded($)
 
     return {}
   })
@@ -263,9 +271,9 @@ export const register: Register = on => {
   // list scrolls on its own under a fixed title, header and net row.
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     if (e.props.hasSurvey) return next(e)
-    const r = await read($, report)
+    const r = (await $.state.get(REPORT)).value ?? null
     if (r === null) return next(e)
-    const isOpen = await read($, isExpanded)
+    const isOpen = (await $.state.get(IS_EXPANDED)).value ?? false
     const { Box, Button, Text } = $.ui.resolve(e)
 
     const counts = (count: LocCount) =>
@@ -283,7 +291,7 @@ export const register: Register = on => {
     const summary = (
       <Box flexDirection="row" justifyContent="space-between">
         <Box flexShrink={0} marginLeft={e.surface === 'desktop' ? -BUTTON_INSET : 0}>
-          <Button key="toggle" plain label={toggleLabel(r, fit, isOpen)} onPress={() => update($, isExpanded, open => !open)} />
+          <Button key="toggle" plain label={toggleLabel(r, fit, isOpen)} onPress={() => toggleExpanded($)} />
           {isDirty && <Text color="warning"> ✎</Text>}
         </Box>
         <Box flexShrink={1} marginLeft={2}>
@@ -334,10 +342,9 @@ export const register: Register = on => {
     const listRows = Math.max(2, Math.min(LIST_ROWS, room))
     const canScroll = r.commits.length > listRows
     const lastOffset = Math.max(0, r.commits.length - listRows)
-    const offset = Math.min(await read($, scroll), lastOffset)
+    const offset = Math.min((await $.state.get(SCROLL)).value ?? 0, lastOffset)
     const visible = r.commits.slice(offset, offset + listRows)
     const page = Math.max(1, listRows - 1)
-    const move = (by: number) => update($, scroll, at => Math.max(0, Math.min(lastOffset, Math.min(at, lastOffset) + by)))
 
     // A scroll bar beside the list: an arrow above and below a track of dots
     // whose bright run is as long, and sits as far down, as the window over
@@ -377,7 +384,7 @@ export const register: Register = on => {
               </Box>
             ))}
             {canScroll &&
-              barCell(<Button key="up" plain dimColor={offset === 0} label="↑" onPress={() => move(-page)} />)}
+              barCell(<Button key="up" plain dimColor={offset === 0} label="↑" onPress={() => scrollBy($, -page, lastOffset)} />)}
           </Box>
           {visible.map((one, row) =>
             tableRow(
@@ -397,7 +404,7 @@ export const register: Register = on => {
           {canScroll && (
             <Box flexDirection="row">
               <Box flexGrow={1} />
-              {barCell(<Button key="down" plain dimColor={offset === lastOffset} label="↓" onPress={() => move(page)} />)}
+              {barCell(<Button key="down" plain dimColor={offset === lastOffset} label="↓" onPress={() => scrollBy($, page, lastOffset)} />)}
             </Box>
           )}
           {older > 0 && (

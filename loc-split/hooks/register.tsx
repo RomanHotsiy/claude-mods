@@ -1,4 +1,4 @@
-import type { EngineInterface, Register, RenderChildren, Timer } from 'claude-code'
+import type { EngineInterface, On, RenderChildren, Timer } from 'claude-code'
 
 import type { LocCommit, LocCount, LocReport, LocSplit } from '../types'
 import { BASES, gitArgv, measureCommands } from './commands'
@@ -248,7 +248,7 @@ const rowWidth = (r: LocReport, fit: Fit): number => {
 const fitFor = (r: LocReport, columns: number): Fit =>
   FITS.find(fit => rowWidth(r, fit) <= columns) ?? FITS[FITS.length - 1]!
 
-export const register: Register = on => {
+export function register(on: On) {
   on('session.start', async ($, e, next) => {
     await $.command.register({
       name: 'loc-split',

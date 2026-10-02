@@ -161,7 +161,7 @@ export function register(on: On) {
     return next(e)
   })
 
-  on('command.run', { command: 'loc-split' }, async $ => {
+  on('command.run', { command: 'loc-split' }, async ($, e, next) => {
     await refresh($)
     if (((await $.state.get(REPORT)).value ?? null) === null) {
       return { text: 'loc-split: not in a git repository with a main or master branch.' }

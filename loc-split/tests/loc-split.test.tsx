@@ -78,6 +78,13 @@ test('band row, accordion and command split lines against main', async ($, on) =
     expect(await textOf(short)).toContain('1–2 of 3')
     await short.unmount()
 
+    // Medium: the labels shorten first; "commits" stays.
+    const medium = await band(75, surface)
+    const mid = await textOf(medium)
+    expect(mid).toContain('commits ↑3 ▾ ✎')
+    expect(mid).toContain('code +9 −2 · cmt +10 −1 · test +2 · doc +3 · gen +1')
+    await medium.unmount()
+
     const narrow = await band(60, surface)
     const row = await textOf(narrow)
     expect(row).toContain('↑3 ▾ ✎')

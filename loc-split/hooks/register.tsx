@@ -50,11 +50,11 @@ const PADDING = 1
 /** The padding the desktop draws inside a native button, pulled back so its label lines up with the table. */
 const BUTTON_INSET = 1
 
-/** The row's forms, widest first; the first that fits the band is drawn. */
+/** The row's forms, widest first; the first that fits the band is drawn. "commits" is the last word to go. */
 const FITS = [
   { isWordy: true, isShort: false, hasRemoved: true },
-  { isWordy: false, isShort: false, hasRemoved: true },
-  { isWordy: false, isShort: true, hasRemoved: true },
+  { isWordy: true, isShort: true, hasRemoved: true },
+  { isWordy: true, isShort: true, hasRemoved: false },
   { isWordy: false, isShort: true, hasRemoved: false },
 ] as const
 
@@ -229,7 +229,7 @@ const rowWidth = (r: LocReport, fit: Fit): number => {
 }
 
 const fitFor = (r: LocReport, columns: number): Fit =>
-  FITS.find(fit => rowWidth(r, fit) <= columns - BAND_CHROME) ?? FITS[FITS.length - 1]!
+  FITS.find(fit => rowWidth(r, fit) <= columns) ?? FITS[FITS.length - 1]!
 
 export const register: Register = on => {
   on('session.start', async ($, e, next) => {
@@ -287,7 +287,9 @@ export const register: Register = on => {
 
     const shown = changed(r.net)
     const isDirty = !isEmptySplit(r.uncommitted)
-    const fit = fitFor(r, e.props.bodyColumns - 2 * PADDING)
+    // The terminal draws the band's collapse mark at its edge; the desktop does not.
+    const chrome = e.surface === 'terminal' ? BAND_CHROME : 0
+    const fit = fitFor(r, e.props.bodyColumns - chrome - 2 * PADDING)
     const summary = (
       <Box flexDirection="row" justifyContent="space-between">
         <Box flexShrink={0} marginLeft={e.surface === 'desktop' ? -BUTTON_INSET : 0}>
@@ -317,7 +319,7 @@ export const register: Register = on => {
       )
     }
 
-    const { columns, names, widths, label } = layout(r, e.props.bodyColumns - BAND_CHROME - 2 * PADDING - SCROLLBAR_CELLS)
+    const { columns, names, widths, label } = layout(r, e.props.bodyColumns - chrome - 2 * PADDING - SCROLLBAR_CELLS)
     // Each cell is a box of fixed width, so the columns line up in a
     // proportional font (the desktop) as well as in a terminal's grid.
     const cells = (split: LocSplit) =>

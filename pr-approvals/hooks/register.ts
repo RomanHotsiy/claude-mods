@@ -3,6 +3,7 @@ import type { EngineInterface, On, Timer, ToolCallResult } from 'claude-code'
 import type { PrReview } from '../types'
 import { detailsRows, drawChip, drawDetails } from './draw'
 import { parseCount, parseView, prUrlsIn, protectionArgv, rulesArgv, viewArgv } from './github'
+import { linkedIn, linkKindOf, resultsArgv, urlsOf, usesArgv, usesIn } from './links'
 
 const LINKED = { plugin: 'pr-approvals', key: 'linked' } as const
 const PRS = { plugin: 'pr-approvals', key: 'prs' } as const
@@ -13,21 +14,36 @@ const REFRESH_MS = 5 * 60_000
 /** How long a branch's required approvals are trusted before they are read again. */
 const RULES_TTL_MS = 30 * 60_000
 const GH_TIMEOUT_MS = 20_000
-/** A command that opens a PR and prints its URL. */
-const OPENS_PR = /\bgh\s+pr\s+create\b/
+const GREP_TIMEOUT_MS = 10_000
 
 let pending: Timer | null = null
 let isRefreshing = false
 let isRefreshAgain = false
 const requiredByBranch = new Map<string, { required: number | null; at: number }>()
 
-/** The PR URLs a finished tool call linked to the session: a PR it opened or one it bound. */
+/** The PR URLs a finished tool call linked to the session: a PR it opened, bound or the app reported. */
 const linkedBy = (e: { tool: string; [input: string]: unknown }, ran: ToolCallResult): string[] => {
   if (ran.deny !== undefined || ran.isError === true) return []
-  if (e.tool === 'Bash' && typeof e.command === 'string' && OPENS_PR.test(e.command)) return prUrlsIn(ran.text ?? '')
-  if (e.tool.startsWith('mcp__') && e.tool.endsWith('__bind_pr') && typeof e.url === 'string') return prUrlsIn(e.url)
+  const kind = linkKindOf(e.tool, e)
 
-  return []
+  return kind === null ? [] : urlsOf(kind, e, ran.text ?? '')
+}
+
+/**
+ * Links the PRs the session linked before this mod was loaded (installed
+ * mid-session, or a resumed session): the same calls `linkedBy` watches,
+ * found in the session's transcript with two read-only greps.
+ */
+async function replay($: EngineInterface, transcript: string) {
+  try {
+    const found = await $.process.run(usesArgv(transcript), { timeoutMs: GREP_TIMEOUT_MS })
+    const uses = usesIn(found.stdout)
+    if (uses.length === 0) return
+    const results = await $.process.run(resultsArgv(transcript, uses.map(use => use.id)), { timeoutMs: GREP_TIMEOUT_MS })
+    if (await link($, linkedIn(uses, results.stdout))) scheduleRefresh($, 0)
+  } catch {
+    // No transcript to read (a -p run, a moved file): only live calls link.
+  }
 }
 
 /**
@@ -143,6 +159,12 @@ export function register(on: On) {
     })
     scheduleRefresh($, 0)
     $.clock.every(REFRESH_MS, () => void refresh($))
+
+    return next(e)
+  })
+
+  on('classic.SessionStart', async ($, e, next) => {
+    await replay($, e.transcript_path)
 
     return next(e)
   })

@@ -2,6 +2,7 @@ import { expect, mock, test } from 'claude-code/testing'
 
 import { chipLabel } from '../hooks/draw'
 import { protectionArgv, rulesArgv, viewArgv } from '../hooks/github'
+import { resultsArgv, usesArgv } from '../hooks/links'
 import type { PrReview } from '../types'
 
 const ROOT = '/work/app'
@@ -95,7 +96,7 @@ test('footer chip summarizes the PRs and opens their details', async ($, on) => 
   expect(isUp).toBe(false)
   for (const surface of ['terminal', 'desktop'] as const) {
     const chip = await footer(surface, ['focus'])
-    expect(await textOf(chip, 'pr-approvals-footer')).toBe('focus🟢 #28707 approved · 2 pending')
+    expect(await textOf(chip, 'pr-approvals-footer')).toBe('focus•\u00a0#28707 approved · 2 pending')
     await chip.unmount()
   }
 
@@ -104,7 +105,7 @@ test('footer chip summarizes the PRs and opens their details', async ($, on) => 
   await run('add https://github.com/acme/cli/pull/3185')
   for (const surface of ['terminal', 'desktop'] as const) {
     const chip = await footer(surface)
-    expect(await textOf(chip, 'pr-approvals-footer')).toBe('🟡 PRs 1/2 approved · 4 pending')
+    expect(await textOf(chip, 'pr-approvals-footer')).toBe('•\u00a0PRs 1/2 approved · 4 pending')
 
     // A click on the chip opens the details; each PR with who reviewed and who is asked.
     await chip.press({ key: 'pr-chip' })
@@ -126,11 +127,11 @@ test('footer chip summarizes the PRs and opens their details', async ($, on) => 
   // Removing it by number leaves the branch's PR.
   expect((await run('remove #3185')).text).toBeUndefined()
   const after = await footer('terminal')
-  expect(await textOf(after, 'pr-approvals-footer')).toBe('🟢 #28707 approved · 2 pending')
+  expect(await textOf(after, 'pr-approvals-footer')).toBe('•\u00a0#28707 approved · 2 pending')
   await after.unmount()
 })
 
-test('the chip names a waiting PR by its mark and pending count alone', async () => {
+test('the chip names a waiting PR by its pending count alone', async () => {
   const pr: PrReview = {
     url: 'https://github.com/acme/app/pull/28642',
     repo: 'acme/app',
@@ -144,8 +145,46 @@ test('the chip names a waiting PR by its mark and pending count alone', async ()
     waitingOn: ['Lightsabers'],
     required: 1,
   }
-  expect(chipLabel([pr])).toBe('🟡 #28642 · 1 pending')
-  expect(chipLabel([{ ...pr, waitingOn: [] }])).toBe('🟡 #28642')
-  expect(chipLabel([{ ...pr, decision: 'CHANGES_REQUESTED', changesBy: ['jlekawa'], waitingOn: [] }])).toBe('🔴 #28642 changes requested')
-  expect(chipLabel([{ ...pr, state: 'MERGED' }])).toBe('🟣 #28642 merged')
+  expect(chipLabel([pr])).toBe('#28642 · 1 pending')
+  expect(chipLabel([{ ...pr, waitingOn: [] }])).toBe('#28642')
+  expect(chipLabel([{ ...pr, decision: 'CHANGES_REQUESTED', changesBy: ['jlekawa'], waitingOn: [] }])).toBe('#28642 changes requested')
+  expect(chipLabel([{ ...pr, state: 'MERGED' }])).toBe('#28642 merged')
+})
+
+// A session that opened three PRs in one command, then asked the app for its
+// bound PR, before the mod was loaded; and one `gh pr edit` that links nothing.
+const TRANSCRIPT = '/home/me/.claude/projects/app/session.jsonl'
+const PR = (n: number) => `https://github.com/acme/app/pull/${n}`
+const line = (role: string, content: unknown[]) => JSON.stringify({ type: role, message: { role, content } })
+const USE_LINES = [
+  line('assistant', [{ type: 'tool_use', id: 'toolu_create', name: 'Bash', input: { command: 'gh pr create --draft --head a && gh pr create --draft --head b && gh pr create --draft --head c' } }]),
+  line('assistant', [{ type: 'tool_use', id: 'toolu_status', name: 'mcp__ccd_pr__get_status', input: {} }]),
+  line('user', [{ type: 'text', text: 'and then gh pr create for the rest?' }]),
+].join('\n')
+const RESULT_LINES = [
+  line('user', [{ type: 'tool_result', tool_use_id: 'toolu_create', content: `${PR(32)}\n${PR(35)}\n${PR(33)}\n` }]),
+  line('user', [{ type: 'tool_result', tool_use_id: 'toolu_status', content: [{ type: 'text', text: JSON.stringify({ pr: { url: PR(33) } }) }] }]),
+].join('\n')
+
+test('PRs linked before the mod loaded are found in the transcript', async ($, on) => {
+  mock.clock(on)
+  on('session.cwd', () => ({ value: ROOT }))
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  const runs: Record<string, ReturnType<typeof ok>> = {
+    [usesArgv(TRANSCRIPT).join(' ')]: ok(USE_LINES),
+    [resultsArgv(TRANSCRIPT, ['toolu_create', 'toolu_status']).join(' ')]: ok(RESULT_LINES),
+  }
+  for (const n of [32, 33, 35]) {
+    runs[viewArgv(PR(n)).join(' ')] = ok(JSON.stringify({ base: 'main', isDraft: true, number: n, requested: [], reviewDecision: 'REVIEW_REQUIRED', reviews: [], state: 'OPEN', title: `PR ${n}`, url: PR(n) }))
+  }
+  runs[rulesArgv('acme/app', 'main').join(' ')] = ok('1\n')
+  on('process.run', ($, e) => ({ value: runs[e.argv.join(' ')] ?? failed(`no fixture: ${e.argv.join(' ')}`) }))
+
+  on('classic.SessionStart', () => ({}))
+  await $.classic.SessionStart({ source: 'resume', transcript_path: TRANSCRIPT })
+  // The replay runs in the background; a refresh through the command waits for it to have linked.
+  await $.command.run({ command: 'pr-approvals', args: 'add ' + PR(32) } as Parameters<typeof $.command.run>[0])
+  const chip = await $.ui.mount({ plugin: 'pr-approvals', surface: 'desktop', component: 'SessionMode', props: { modes: [] } })
+  expect((await chip.find({ key: 'pr-approvals-footer' }))?.text).toBe('•\u00a0PRs 0/3 approved')
+  await chip.unmount()
 })

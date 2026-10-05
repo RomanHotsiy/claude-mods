@@ -30,7 +30,7 @@
       "name": "pr-approvals",
       "source": "./pr-approvals",
       "description": "Review status of the session's pull requests in a footer chip (approved or not, how many reviews are pending) that opens per-PR details",
-      "version": "0.1.2",
+      "version": "0.1.3",
       "author": {
         "name": "Roman Hotsiy",
         "url": "https://github.com/RomanHotsiy"

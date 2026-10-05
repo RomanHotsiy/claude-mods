@@ -25,6 +25,24 @@
         "mod",
         "status"
       ]
+    },
+    {
+      "name": "pr-approvals",
+      "source": "./pr-approvals",
+      "description": "Review status of the session's pull requests in a footer chip (approved or not, how many reviews are pending) that opens per-PR details",
+      "version": "0.1.0",
+      "author": {
+        "name": "Roman Hotsiy",
+        "url": "https://github.com/RomanHotsiy"
+      },
+      "license": "MIT",
+      "keywords": [
+        "github",
+        "pull-request",
+        "review",
+        "mod",
+        "status"
+      ]
     }
   ]
 }

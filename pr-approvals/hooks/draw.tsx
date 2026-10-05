@@ -40,36 +40,48 @@ const standing = (pr: PrReview): string => {
   return LOOKS[verdict].word
 }
 
-/** The color of the dot before the chip: red if any open PR has changes requested, green if all are approved, else orange; violet once all are merged. */
-const dotColor = (prs: PrReview[]): Color | undefined => {
+/**
+ * The mark leading the chip: red if any open PR has changes requested, green
+ * if all are approved, yellow while reviews are still asked for, violet once
+ * all are merged. An emoji, so the label carries its own color: a surface
+ * draws the footer's Button label but may drop a colored Text beside it.
+ */
+const markOf = (prs: PrReview[]): string => {
   const verdicts = prs.filter(isOpen).map(verdictOf)
-  if (verdicts.length === 0) return prs.some(pr => pr.state === 'MERGED') ? VIOLET : undefined
-  if (verdicts.includes('changes')) return 'error'
+  if (verdicts.length === 0) return prs.some(pr => pr.state === 'MERGED') ? '🟣' : '⚪'
+  if (verdicts.includes('changes')) return '🔴'
 
-  return verdicts.every(verdict => verdict === 'approved') ? 'success' : ORANGE
+  return verdicts.every(verdict => verdict === 'approved') ? '🟢' : '🟡'
 }
 
 /**
- * The chip's text, a summary over every PR: one PR is named
- * (`#28707 approved · 2 pending`), several are counted
- * (`PRs 1/3 approved · 4 pending`). Merged and closed ones count only when
+ * The chip's text, a summary over every PR after its mark: one PR is named
+ * (`🟡 #28707 · 2 pending`, `🟢 #28707 approved`), several are counted
+ * (`🟡 PRs 1/3 approved · 4 pending`). Merged and closed ones count only when
  * nothing is open.
  */
 export const chipLabel = (prs: PrReview[]): string => {
   const open = prs.filter(isOpen)
   const pending = open.reduce((sum, pr) => sum + pr.waitingOn.length, 0)
   const tail = pending > 0 ? ` · ${pending} pending` : ''
+  const mark = markOf(prs)
   const lone = open.length === 1 ? open[0] : undefined
-  if (lone !== undefined) return `#${lone.number}${lone.isDraft ? ' draft' : ''} ${standing(lone)}${tail}`
+  if (lone !== undefined) {
+    const verdict = verdictOf(lone)
+    // Waiting needs no word: the yellow mark and the pending count say it.
+    const word = verdict === 'waiting' ? '' : ` ${LOOKS[verdict].word}`
+
+    return `${mark} #${lone.number}${lone.isDraft ? ' draft' : ''}${word}${tail}`
+  }
   if (open.length === 0) {
     const last = prs.length === 1 ? prs[0] : undefined
 
-    return last !== undefined ? `#${last.number} ${LOOKS[verdictOf(last)].word}` : `PRs ${prs.length} done`
+    return last !== undefined ? `${mark} #${last.number} ${LOOKS[verdictOf(last)].word}` : `${mark} PRs ${prs.length} done`
   }
   const approved = open.filter(pr => verdictOf(pr) === 'approved').length
   const changes = open.filter(pr => verdictOf(pr) === 'changes').length
 
-  return `PRs ${approved}/${open.length} approved${changes > 0 ? ` · ${changes} changes` : ''}${tail}`
+  return `${mark} PRs ${approved}/${open.length} approved${changes > 0 ? ` · ${changes} changes` : ''}${tail}`
 }
 
 export type ChipActions = { open: () => void }
@@ -77,7 +89,6 @@ export type ChipActions = { open: () => void }
 /** The footer: the engine's mode labels, as it draws them, then the chip. */
 export function drawChip(ui: DrawUi, prs: PrReview[], modes: readonly string[], actions: ChipActions) {
   const { Box, Button, Text } = ui
-  const color = dotColor(prs)
 
   return (
     <Box key="pr-approvals-footer" flexDirection="row">
@@ -86,11 +97,6 @@ export function drawChip(ui: DrawUi, prs: PrReview[], modes: readonly string[], 
           <Text dimColor>{modes.join(' & ')}</Text>
         </Box>
       )}
-      <Box marginRight={1}>
-        <Text color={color} dimColor={color === undefined}>
-          ●
-        </Text>
-      </Box>
       <Button key="pr-chip" plain dimColor label={chipLabel(prs)} onPress={actions.open} />
     </Box>
   )

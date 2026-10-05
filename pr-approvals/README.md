@@ -7,7 +7,7 @@ A [Claude Code mod](https://claude.dev/blog/getting-started-with-claude-code-mod
 ● PRs 1/3 approved · 4 pending         several
 ```
 
-The dot is green when every open PR is approved, red when any has changes requested, and yellow otherwise. `pending` counts the review requests still open: people and teams asked who have not reviewed since. With one PR the chip says what it still lacks (`needs 1 approval`), counted against the approvals the base branch's rules require.
+The dot is green when every open PR is approved, red when any has changes requested, orange while reviews are still asked for, and violet once they are all merged. `pending` counts the review requests still open: people and teams asked who have not reviewed since. With one PR the chip says what it still lacks (`needs 1 approval`), counted against the approvals the base branch's rules require.
 
 Click the chip (or type `/pr-approvals`) to open the details: for each PR, its status and approvals against what is required, its title, and who approved, who asked for changes and whose review is pending. Click a PR's number to open it on GitHub; `r` refreshes, Escape closes.
 

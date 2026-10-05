@@ -9,7 +9,7 @@ const PRS = { plugin: 'pr-approvals', key: 'prs' } as const
 
 const PANE = 'pr-approvals'
 
-const REFRESH_MS = 60_000
+const REFRESH_MS = 5 * 60_000
 /** How long a branch's required approvals are trusted before they are read again. */
 const RULES_TTL_MS = 30 * 60_000
 const GH_TIMEOUT_MS = 20_000

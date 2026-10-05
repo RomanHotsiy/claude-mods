@@ -17,9 +17,9 @@ type Color = 'success' | 'error' | 'warning'
 const LOOKS: Record<Verdict, { mark: string; word: string; color?: Color }> = {
   approved: { mark: '✓', word: 'approved', color: 'success' },
   changes: { mark: '✗', word: 'changes requested', color: 'error' },
-  waiting: { mark: '○', word: 'not approved', color: 'warning' },
-  merged: { mark: '●', word: 'merged' },
-  closed: { mark: '●', word: 'closed' },
+  waiting: { mark: '', word: 'not approved', color: 'warning' },
+  merged: { mark: '', word: 'merged' },
+  closed: { mark: '', word: 'closed' },
 }
 
 const isOpen = (pr: PrReview) => pr.state === 'OPEN'
@@ -77,10 +77,16 @@ export function drawChip(ui: DrawUi, prs: PrReview[], modes: readonly string[], 
 
   return (
     <Box key="pr-approvals-footer" flexDirection="row">
-      {modes.length > 0 && <Text dimColor>{modes.join(' & ')}  </Text>}
-      <Text color={color} dimColor={color === undefined}>
-        ●{' '}
-      </Text>
+      {modes.length > 0 && (
+        <Box marginRight={2}>
+          <Text dimColor>{modes.join(' & ')}</Text>
+        </Box>
+      )}
+      <Box marginRight={1}>
+        <Text color={color} dimColor={color === undefined}>
+          ●
+        </Text>
+      </Box>
       <Button key="pr-chip" plain dimColor label={chipLabel(prs)} onPress={actions.open} />
     </Box>
   )
@@ -92,11 +98,17 @@ export type DetailsActions = { refresh: () => void; close: () => void }
 export function drawDetails(ui: DrawUi, prs: PrReview[], actions: DetailsActions) {
   const { Box, Button, Link, Text } = ui
   const isMixed = new Set(prs.map(pr => pr.repo)).size > 1
+  // Margins rather than spaces: a surface may trim a Text's edge spaces.
+  const dot = () => (
+    <Box marginX={1}>
+      <Text dimColor>·</Text>
+    </Box>
+  )
   const people = (label: string, names: string[], color?: Color) =>
     names.length > 0 && (
       <Text wrap="truncate-end">
         <Text color={color} dimColor={color === undefined}>
-          {label}{' '}
+          {label}:{' '}
         </Text>
         {names.join(', ')}
       </Text>
@@ -113,17 +125,19 @@ export function drawDetails(ui: DrawUi, prs: PrReview[], actions: DetailsActions
           <Box key={`pr-${pr.url}`} flexDirection="column" marginTop={i > 0 ? 1 : 0}>
             <Box flexDirection="row">
               <Link href={pr.url} label={`${isMixed ? pr.repo.split('/')[1] : ''}#${pr.number}`} />
-              {pr.isDraft && <Text dimColor> draft</Text>}
+              {pr.isDraft && [dot(), <Text dimColor>draft</Text>]}
+              {dot()}
               <Text color={look.color} dimColor={look.color === undefined}>
-                {' '}
-                {look.mark} {standing(pr)}
+                {look.mark === '' ? '' : `${look.mark} `}
+                {standing(pr)}
               </Text>
-              {isOpen(pr) && pr.required !== null && (
-                <Text dimColor>
-                  {' '}
-                  {pr.approvedBy.length}/{pr.required}
-                </Text>
-              )}
+              {isOpen(pr) &&
+                pr.required !== null && [
+                  dot(),
+                  <Text dimColor>
+                    {pr.approvedBy.length}/{pr.required} approvals
+                  </Text>,
+                ]}
             </Box>
             {pr.title !== '' && <Text wrap="truncate-end">{pr.title}</Text>}
             {people('approved', pr.approvedBy, 'success')}

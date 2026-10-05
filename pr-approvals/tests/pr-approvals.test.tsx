@@ -93,7 +93,7 @@ test('footer chip summarizes the PRs and opens their details', async ($, on) => 
   expect(isUp).toBe(false)
   for (const surface of ['terminal', 'desktop'] as const) {
     const chip = await footer(surface, ['focus'])
-    expect(await textOf(chip, 'pr-approvals-footer')).toBe('focus  ● #28707 approved · 2 pending')
+    expect(await textOf(chip, 'pr-approvals-footer')).toBe('focus●#28707 approved · 2 pending')
     await chip.unmount()
   }
 
@@ -102,19 +102,19 @@ test('footer chip summarizes the PRs and opens their details', async ($, on) => 
   await run('add https://github.com/acme/cli/pull/3185')
   for (const surface of ['terminal', 'desktop'] as const) {
     const chip = await footer(surface)
-    expect(await textOf(chip, 'pr-approvals-footer')).toBe('● PRs 1/2 approved · 4 pending')
+    expect(await textOf(chip, 'pr-approvals-footer')).toBe('●PRs 1/2 approved · 4 pending')
 
     // A click on the chip opens the details; each PR with who reviewed and who is asked.
     await chip.press({ key: 'pr-chip' })
     expect(isUp).toBe(true)
     const pane = await details(surface)
     const text = await textOf(pane, 'pr-approvals')
-    expect(text).toContain('app#28707 ✓ approved 1/1')
+    expect(text).toContain('app#28707·✓ approved·1/1 approvals')
     expect(text).toContain('Localize navigation on translated pages')
-    expect(text).toContain('approved jlekawa')
-    expect(text).toContain('pending Lightsabers, Staff engineers')
-    expect(text).toContain('cli#3185 ○ not approved')
-    expect(text).toContain('pending Technical Writers, Dark Side')
+    expect(text).toContain('approved: jlekawa')
+    expect(text).toContain('pending: Lightsabers, Staff engineers')
+    expect(text).toContain('cli#3185·not approved')
+    expect(text).toContain('pending: Technical Writers, Dark Side')
     await pane.press({ key: 'close' })
     expect(isUp).toBe(false)
     await pane.unmount()
@@ -124,6 +124,6 @@ test('footer chip summarizes the PRs and opens their details', async ($, on) => 
   // Removing it by number leaves the branch's PR.
   expect((await run('remove #3185')).text).toBeUndefined()
   const after = await footer('terminal')
-  expect(await textOf(after, 'pr-approvals-footer')).toBe('● #28707 approved · 2 pending')
+  expect(await textOf(after, 'pr-approvals-footer')).toBe('●#28707 approved · 2 pending')
   await after.unmount()
 })

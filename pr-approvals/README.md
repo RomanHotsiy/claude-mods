@@ -12,10 +12,10 @@ The dot is green when every open PR is approved, red when any has changes reques
 Click the chip (or type `/pr-approvals`) to open the details: for each PR, its status and approvals against what is required, its title, and who approved, who asked for changes and whose review is pending. Click a PR's number to open it on GitHub; `r` refreshes, Escape closes.
 
 ```
-#28707 ✓ approved 1/1
+#28707 · ✓ approved · 1/1 approvals
 Localize navigation on translated pages
-approved jlekawa
-pending Lightsabers, Staff engineers
+approved: jlekawa
+pending: Lightsabers, Staff engineers
 ```
 
 Where a repository's rules require no reviews, a PR counts as approved once someone approves it.
@@ -33,7 +33,7 @@ Claude Code mods can't draw into the desktop app's own PR chips in the session h
 
 ## When it refreshes
 
-When the session starts, at the end of every turn, right after a PR is linked, a moment after Claude runs `gh pr`, `git push`, `git checkout` or `git switch`, and every 60 seconds, so reviews that land while you work show up. Each refresh is a few `gh` calls per PR.
+When the session starts, at the end of every turn, right after a PR is linked, a moment after Claude runs `gh pr`, `git push`, `git checkout` or `git switch`, and every 5 minutes, so reviews that land while you are away show up; press `r` in the details or type `/pr-approvals` to refresh sooner. Each refresh is a few `gh` calls per PR.
 
 ## Install
 
@@ -78,7 +78,7 @@ The `--jq` filters keep only names and states, so review comments never reach th
 
 | Event | What it does |
 | --- | --- |
-| `session.start` | registers `/pr-approvals`, reads once, and starts a 60-second refresh timer |
+| `session.start` | registers `/pr-approvals`, reads once, and starts a 5-minute refresh timer |
 | `tool.call` | lets every tool call through unchanged; after one finishes it may link a PR (above) or schedule a refresh. It never changes the call's input or result |
 | `turn.complete` | schedules a refresh |
 | `command.run` for `/pr-approvals` | refreshes and opens or closes the details, or adds, removes or clears linked PRs |

@@ -12,13 +12,17 @@ import { type Verdict, verdictOf } from './github'
 /** The element constructors both drawings use; the terminal and the desktop carry all four. */
 export type DrawUi = Pick<ElementTable<'terminal' | 'desktop'>, 'Box' | 'Text' | 'Button' | 'Link'>
 
-type Color = 'success' | 'error' | 'warning'
+/** A theme key, or a raw color where the theme has none: GitHub's merged violet, an orange for a review still asked for. */
+type Color = 'success' | 'error' | typeof VIOLET | typeof ORANGE
+
+const VIOLET = '#8957e5'
+const ORANGE = '#f0883e'
 
 const LOOKS: Record<Verdict, { mark: string; word: string; color?: Color }> = {
   approved: { mark: '✓', word: 'approved', color: 'success' },
   changes: { mark: '✗', word: 'changes requested', color: 'error' },
-  waiting: { mark: '', word: 'not approved', color: 'warning' },
-  merged: { mark: '', word: 'merged' },
+  waiting: { mark: '', word: 'not approved', color: ORANGE },
+  merged: { mark: '', word: 'merged', color: VIOLET },
   closed: { mark: '', word: 'closed' },
 }
 
@@ -36,13 +40,13 @@ const standing = (pr: PrReview): string => {
   return LOOKS[verdict].word
 }
 
-/** The color of the dot before the chip: red if any open PR has changes requested, green if all are approved. */
+/** The color of the dot before the chip: red if any open PR has changes requested, green if all are approved, else orange; violet once all are merged. */
 const dotColor = (prs: PrReview[]): Color | undefined => {
   const verdicts = prs.filter(isOpen).map(verdictOf)
-  if (verdicts.length === 0) return undefined
+  if (verdicts.length === 0) return prs.some(pr => pr.state === 'MERGED') ? VIOLET : undefined
   if (verdicts.includes('changes')) return 'error'
 
-  return verdicts.every(verdict => verdict === 'approved') ? 'success' : 'warning'
+  return verdicts.every(verdict => verdict === 'approved') ? 'success' : ORANGE
 }
 
 /**
@@ -142,7 +146,7 @@ export function drawDetails(ui: DrawUi, prs: PrReview[], actions: DetailsActions
             {pr.title !== '' && <Text wrap="truncate-end">{pr.title}</Text>}
             {people('approved', pr.approvedBy, 'success')}
             {people('changes requested', pr.changesBy, 'error')}
-            {isOpen(pr) && people('pending', pr.waitingOn, 'warning')}
+            {isOpen(pr) && people('pending', pr.waitingOn, ORANGE)}
             {isOpen(pr) && pr.approvedBy.length + pr.changesBy.length + pr.waitingOn.length === 0 && (
               <Text dimColor>no reviewers yet</Text>
             )}

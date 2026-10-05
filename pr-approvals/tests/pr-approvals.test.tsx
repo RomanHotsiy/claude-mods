@@ -1,6 +1,8 @@
 import { expect, mock, test } from 'claude-code/testing'
 
+import { chipLabel } from '../hooks/draw'
 import { protectionArgv, rulesArgv, viewArgv } from '../hooks/github'
+import type { PrReview } from '../types'
 
 const ROOT = '/work/app'
 const BRANCH_PR = 'https://github.com/acme/app/pull/28707'
@@ -93,7 +95,7 @@ test('footer chip summarizes the PRs and opens their details', async ($, on) => 
   expect(isUp).toBe(false)
   for (const surface of ['terminal', 'desktop'] as const) {
     const chip = await footer(surface, ['focus'])
-    expect(await textOf(chip, 'pr-approvals-footer')).toBe('focus●#28707 approved · 2 pending')
+    expect(await textOf(chip, 'pr-approvals-footer')).toBe('focus🟢 #28707 approved · 2 pending')
     await chip.unmount()
   }
 
@@ -102,7 +104,7 @@ test('footer chip summarizes the PRs and opens their details', async ($, on) => 
   await run('add https://github.com/acme/cli/pull/3185')
   for (const surface of ['terminal', 'desktop'] as const) {
     const chip = await footer(surface)
-    expect(await textOf(chip, 'pr-approvals-footer')).toBe('●PRs 1/2 approved · 4 pending')
+    expect(await textOf(chip, 'pr-approvals-footer')).toBe('🟡 PRs 1/2 approved · 4 pending')
 
     // A click on the chip opens the details; each PR with who reviewed and who is asked.
     await chip.press({ key: 'pr-chip' })
@@ -124,6 +126,26 @@ test('footer chip summarizes the PRs and opens their details', async ($, on) => 
   // Removing it by number leaves the branch's PR.
   expect((await run('remove #3185')).text).toBeUndefined()
   const after = await footer('terminal')
-  expect(await textOf(after, 'pr-approvals-footer')).toBe('●#28707 approved · 2 pending')
+  expect(await textOf(after, 'pr-approvals-footer')).toBe('🟢 #28707 approved · 2 pending')
   await after.unmount()
+})
+
+test('the chip names a waiting PR by its mark and pending count alone', async () => {
+  const pr: PrReview = {
+    url: 'https://github.com/acme/app/pull/28642',
+    repo: 'acme/app',
+    number: 28642,
+    title: 'Translate the sidebar',
+    state: 'OPEN',
+    isDraft: false,
+    decision: 'REVIEW_REQUIRED',
+    approvedBy: [],
+    changesBy: [],
+    waitingOn: ['Lightsabers'],
+    required: 1,
+  }
+  expect(chipLabel([pr])).toBe('🟡 #28642 · 1 pending')
+  expect(chipLabel([{ ...pr, waitingOn: [] }])).toBe('🟡 #28642')
+  expect(chipLabel([{ ...pr, decision: 'CHANGES_REQUESTED', changesBy: ['jlekawa'], waitingOn: [] }])).toBe('🔴 #28642 changes requested')
+  expect(chipLabel([{ ...pr, state: 'MERGED' }])).toBe('🟣 #28642 merged')
 })

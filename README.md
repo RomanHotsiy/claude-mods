@@ -5,7 +5,6 @@
 | Mod | What it does |
 | --- | --- |
 | [loc-split](loc-split) | Lines changed against `main`, split into code, comments, tests, docs and generated files, in a row above the prompt that opens into a per-commit table |
-| [pr-approvals](pr-approvals) | A chip in the prompt footer summing up review status across the session's pull requests (approved or not, how many reviews are pending) that opens per-PR details |
 
 ![loc-split](assets/loc-split.png)
 
@@ -17,14 +16,13 @@
 2. Type `plugins` and press Enter.
 3. In the top right corner, click **Add**.
 4. Enter `RomanHotsiy/claude-mods` and click **Sync**.
-5. You should now see **Loc split** and **Pr approvals** in the list.
+5. You should now see **Loc split** in the list.
 
 ### Claude Code in a terminal
 
 ```
 /plugin marketplace add RomanHotsiy/claude-mods
 /plugin install loc-split@claude-mods
-/plugin install pr-approvals@claude-mods
 /reload-plugins
 ```
 
